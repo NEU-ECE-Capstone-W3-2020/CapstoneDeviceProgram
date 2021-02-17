@@ -65,12 +65,13 @@ int init(void){
     pi = pigpio_start(NULL, NULL);
     if(pi < 0){
         fprintf(stderr, "Failed to connect to pigpi daemon, is it running?\n");
+        fprintf(stderr, "Error: %s\n", pigpio_error(pi));
         return 1;
     }
     // TODO: check path
     serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
     if(serial < 0) {
-        fprintf(stderr, "Failed to open serial\n");
+        fprintf(stderr, "Failed to open serial: %s\n", pigpio_error(serial));
         return 1;
     }
     return 0;
@@ -99,7 +100,7 @@ int main(int argc, char** argv) {
                 memmove(buffer, buffer + rv, rv);
                 buf_idx -= rv;
             } else if(rv < 0) {
-                fprintf(stderr, "Failed to read from serial, code: %d\n", rv);
+                fprintf(stderr, "Failed to read from serial: %s\n", pigpio_error(rv));
             }
         }
         // TODO: check bluetooth, prob through another serial call
