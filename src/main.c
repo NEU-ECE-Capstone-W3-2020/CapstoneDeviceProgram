@@ -3,12 +3,20 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "pigpiod_if2.h"
 
 #define DEBUG
-#define BAUDRATE    115200
+#define BAUDRATE      9600
 #define MAX_SIZE       256
+#define HDR_SIZE         2
+#define TYPE_IDX         0
+#define LEN_IDX          1
+
+#define TTS_MSG_TYPE  0x01
+#define BT_MSG_TYPE   0x02
+
 #define UNUSED(arg) (void) arg
 
 enum Mode {
@@ -49,13 +57,27 @@ void toggle_mode(void){
     }
 }
 
-int text_to_voice(const char data, const size_t length){
-    // TODO
+int text_to_voice(const char *data, const uint8_t length){
+  if(length >= MAX_SIZE - HDR_SIZE) return -1;
+  char buffer[MAX_SIZE];
+  uint32_t buf_idx = 0;
+  buffer[buf_idx++] = TTS_MSG_TYPE;
+  buffer[buf_idx++] = length + HDR_SIZE;
+  memcpy(buffer + buf_idx, data, length);
+  buf_idx += length;
+  return serial_write(pi, serial, buffer, buf_idx);
 }
 
-int parse_packet(const char *buffer, const size_t length){
-    // TODO
-    return length;
+int parse_packet(const char *buffer, const uint8_t length){
+  if(length < HDR_SIZE) return 0;
+  switch(buffer[TYPE_IDX]) {
+    case BT_MSG_TYPE:
+      if(length < buffer[LEN_IDX]) return 0;
+      text_to_voice(buffer + HDR_SIZE, buffer[LEN_IDX] - HDR_SIZE);
+      return buffer[LEN_IDX];
+    default:
+      return 0;
+  }
 }
 
 int init(void){
@@ -87,23 +109,33 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    size_t buf_idx = 0;
-    char buffer[MAX_SIZE];
+    uint8_t arx_buf_idx = 0;
+    char arduinoRxBuffer[MAX_SIZE];
+
+    uint8_t bt_buf_idx = 0;
+    char bluetoothRxBuffer[MAX_SIZE];
+
+    int rv = 0;
 
     while(keep_running) {
         // main event loop
         if(serial_data_available(pi, serial) > 0) {
-            int rv = serial_read(pi, serial, buffer, MAX_SIZE - buf_idx);
+            int rv = serial_read(pi, serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
             if(rv > 0) {
-                buf_idx += rv;
-                rv = parse_packet(buffer, buf_idx);
-                memmove(buffer, buffer + rv, rv);
-                buf_idx -= rv;
+                arx_buf_idx += rv;
+                rv = parse_packet(arduinoRxBuffer, arx_buf_idx);
+                memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
+                arx_buf_idx -= rv;
             } else if(rv < 0) {
                 fprintf(stderr, "Failed to read from serial: %s\n", pigpio_error(rv));
             }
         }
-        // TODO: check bluetooth, prob through another serial call
+        if((rv = read(stdin, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx) > 0) {
+            bt_buf_idx += rv;
+            rv = parse_packet(bluetoothRxBuffer, bt_buf_idx);
+            memmove(bluetoothRxBuffer, bluetoothRxBuffer + rv, bt_buf_idx - rv);
+            bt_buf_idx -= rv;
+        }
     }
 
     // Clean-up
