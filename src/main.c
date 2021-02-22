@@ -134,7 +134,7 @@ int init(void){
     }
     if(gpio_write(pi, REFERENCE_PIN, 1))
     // TODO: check path
-    serial = serial_open(pi, "/dev/ttys0", BAUDRATE, 0);
+    serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
     if(serial < 0) {
         printf("Failed to open serial: %s\n", pigpio_error(serial));
         return -1;
