@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "pigpiod_if2.h"
 
@@ -68,7 +70,18 @@ int text_to_voice(const char *data, const uint8_t length){
   return serial_write(pi, serial, buffer, buf_idx);
 }
 
-int parse_packet(const char *buffer, const uint8_t length){
+int parse_bt(const char *buffer, const uint8_t length){
+  int ret = 0;
+  for(int i = 0; i < length; ++i) {
+    if(buffer[i] == '\n') {
+      text_to_voice(buffer + ret, i - ret);
+      ret += i;
+    }
+  }
+  return ret;
+}
+
+int parse_serial(const char *buffer, const uint8_t length){
   if(length < HDR_SIZE) return 0;
   switch(buffer[TYPE_IDX]) {
     case BT_MSG_TYPE:
@@ -96,13 +109,24 @@ int init(void){
         fprintf(stderr, "Failed to open serial: %s\n", pigpio_error(serial));
         return 1;
     }
+    // Set stdin to non-blocking
+    int flags = fcntl(STDIN_FILENO, F_GETFL);
+    if(flags < 0) {
+      perror("Failed to get stdin flags");
+      serial_close(pi, serial);
+      pigpio_stop(pi);
+      return 1;
+    }
+    if(fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK) < 0) {
+      perror("Failed to set stdin flags");
+      serial_close(pi, serial);
+      pigpio_stop(pi);
+      return 1;
+    }
     return 0;
 }
 
-int main(int argc, char** argv) {
-    UNUSED(argc);
-    UNUSED(argv);
-
+int main(void) {
 
     // Initialize
     if(init() != 0){
@@ -115,6 +139,7 @@ int main(int argc, char** argv) {
     uint8_t bt_buf_idx = 0;
     char bluetoothRxBuffer[MAX_SIZE];
 
+    int ret = 0;
     int rv = 0;
 
     while(keep_running) {
@@ -123,22 +148,30 @@ int main(int argc, char** argv) {
             int rv = serial_read(pi, serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
             if(rv > 0) {
                 arx_buf_idx += rv;
-                rv = parse_packet(arduinoRxBuffer, arx_buf_idx);
+                rv = parse_serial(arduinoRxBuffer, arx_buf_idx);
                 memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
                 arx_buf_idx -= rv;
             } else if(rv < 0) {
                 fprintf(stderr, "Failed to read from serial: %s\n", pigpio_error(rv));
+                ret = 1;
+                keep_running = 0;
             }
         }
-        if((rv = read(stdin, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx) > 0) {
+
+        if((rv = read(STDIN_FILENO, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx)) > 0) {
             bt_buf_idx += rv;
-            rv = parse_packet(bluetoothRxBuffer, bt_buf_idx);
+            rv = parse_bt(bluetoothRxBuffer, bt_buf_idx);
             memmove(bluetoothRxBuffer, bluetoothRxBuffer + rv, bt_buf_idx - rv);
             bt_buf_idx -= rv;
+        } else if(rv != EAGAIN && rv != EWOULDBLOCK) {
+          perror("Error reading from stdin");
+          ret = 1;
+          keep_running = 0;
         }
     }
 
     // Clean-up
+    serial_close(pi, serial);
     pigpio_stop(pi);
-    return 0;
+    return ret;
 }

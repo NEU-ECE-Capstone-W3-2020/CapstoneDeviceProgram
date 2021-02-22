@@ -3,7 +3,7 @@ SRC      := ./src
 BIN      := ./bin
 
 CC       := gcc
-CC_FLAGS := -std=c11 -Wall -Wextra -Wpedantic -g -I$(INCLUDE)
+CC_FLAGS := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE)
 
 .PHONY: clean
 
