@@ -38,12 +38,12 @@ static int pi = 0;
 static int serial = 0;
 static int epoll_fd = 0;
 
-#ifndef DEBUG
+#ifdef DEBUG
 void print_buffer_string(const char *buffer, const int size) {
   char *str_buf = malloc(size + 1);
   memcpy(str_buf, buffer, size);
   str_buf[size] = '\0';
-  printf("%s", str_buf);
+  printf("%s\n", str_buf);
   free(str_buf);
 }
 #endif
@@ -78,20 +78,27 @@ int text_to_voice(const char *data, const uint8_t length){
   buffer[buf_idx++] = length + HDR_SIZE;
   memcpy(buffer + buf_idx, data, length);
   buf_idx += length;
-#ifndef DEBUG
-  print_buffer_string(buffer, 0, buf_idx);
+#ifdef DEBUG
+  print_buffer_string(buffer, buf_idx);
 #endif
-  return serial_write(pi, serial, buffer, buf_idx);
+  int rv = serial_write(pi, serial, buffer, buf_idx);
+  if(rv < 0) {
+    fprintf(stderr, "Failed to write over serial: %s\n", pigpio_error(rv));
+  }
+  return -1;
 }
 
 int parse_bt(const char *buffer, const uint8_t length){
   int ret = 0;
   for(int i = 0; i < length; ++i) {
     if(buffer[i] == '\n') {
-#ifndef DEBUG
+#ifdef DEBUG
       print_buffer_string(buffer + ret, i - ret);
 #endif
-      text_to_voice(buffer + ret, i - ret);
+      int rv = text_to_voice(buffer + ret, i - ret);
+      if(rv < 0) {
+          return rv;
+      }
       ret += i;
     }
   }
@@ -121,7 +128,7 @@ int init(void){
         return -1;
     }
     // TODO: check path
-    serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
+    serial = serial_open(pi, "/dev/serial1", BAUDRATE, 0);
     if(serial < 0) {
         fprintf(stderr, "Failed to open serial: %s\n", pigpio_error(serial));
         return -1;
@@ -172,6 +179,10 @@ int main(void) {
             if(rv > 0) {
                 arx_buf_idx += rv;
                 rv = parse_serial(arduinoRxBuffer, arx_buf_idx);
+                if(rv < 0) {
+                    ret = 1;
+                    keep_running = 0;
+                }
                 memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
                 arx_buf_idx -= rv;
             } else if(rv < 0) {
@@ -188,17 +199,21 @@ int main(void) {
           if(rv >= 0) {
             bt_buf_idx += rv;
             rv = parse_bt(bluetoothRxBuffer, bt_buf_idx);
+            if(rv < 0) {
+                ret = 1;
+                keep_running = 0;
+            }
             memmove(bluetoothRxBuffer, bluetoothRxBuffer + rv, bt_buf_idx - rv);
             bt_buf_idx -= rv;
           } else {
-            perror("Error reading from stdin");
-            ret = 1;
-            keep_running = 0;
+              perror("Error reading from stdin");
+              ret = 1;
+              keep_running = 0;
           }
         } else if(rv < 0) {
-          perror("Error in epoll_wait");
-          ret = 1;
-          keep_running = 0;
+            perror("Error in epoll_wait");
+            ret = 1;
+            keep_running = 0;
         }
     }
 
