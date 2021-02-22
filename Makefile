@@ -4,7 +4,7 @@ BIN      := ./bin
 PIGPIO   := ../pigpio
 
 CC       := gcc
-CC_FLAGS := -std=c11 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(PIGPIO)
+CC_FLAGS := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(PIGPIO)
 
 .PHONY: clean
 

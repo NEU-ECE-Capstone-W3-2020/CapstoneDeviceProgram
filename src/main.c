@@ -38,6 +38,16 @@ static int pi = 0;
 static int serial = 0;
 static int epoll_fd = 0;
 
+#ifndef DEBUG
+void print_buffer_string(const char *buffer, const int size) {
+  char *str_buf = malloc(size + 1);
+  memcpy(str_buf, buffer, size);
+  str_buf[size] = '\0';
+  printf("%s", str_buf);
+  free(str_buf);
+}
+#endif
+
 void sigint_handler(int dummy) {
     UNUSED(dummy);
     keep_running = 0;
@@ -68,6 +78,9 @@ int text_to_voice(const char *data, const uint8_t length){
   buffer[buf_idx++] = length + HDR_SIZE;
   memcpy(buffer + buf_idx, data, length);
   buf_idx += length;
+#ifndef DEBUG
+  print_buffer_string(buffer, 0, buf_idx);
+#endif
   return serial_write(pi, serial, buffer, buf_idx);
 }
 
@@ -75,6 +88,9 @@ int parse_bt(const char *buffer, const uint8_t length){
   int ret = 0;
   for(int i = 0; i < length; ++i) {
     if(buffer[i] == '\n') {
+#ifndef DEBUG
+      print_buffer_string(buffer + ret, i - ret);
+#endif
       text_to_voice(buffer + ret, i - ret);
       ret += i;
     }
@@ -136,6 +152,7 @@ int main(void) {
     if(init() != 0){
         return 1;
     }
+    printf("Initialized!\n");
 
     uint8_t arx_buf_idx = 0;
     char arduinoRxBuffer[MAX_SIZE];
@@ -150,6 +167,7 @@ int main(void) {
     while(keep_running) {
         // main event loop
         if(serial_data_available(pi, serial) > 0) {
+            printf("Serial Data Found!\n");
             int rv = serial_read(pi, serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
             if(rv > 0) {
                 arx_buf_idx += rv;
@@ -164,6 +182,7 @@ int main(void) {
         }
         rv = epoll_wait(epoll_fd, &ee, 1, 0);
         if(rv > 0 && (ee.events & EPOLLIN)) {
+          printf("Bluetooth data found!\n");
           // File descriptor is ready to read
           rv = read(ee.data.fd, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx);
           if(rv >= 0) {
@@ -184,6 +203,7 @@ int main(void) {
     }
 
     // Clean-up
+    printf("Clean up!\n");
     serial_close(pi, serial);
     pigpio_stop(pi);
     close(epoll_fd);
