@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <sys/epoll.h>
 #include <errno.h>
 
 #include "pigpiod_if2.h"
@@ -36,6 +36,7 @@ static enum Mode mode = Explore;
 static enum State state = Idle;
 static int pi = 0;
 static int serial = 0;
+static int epoll_fd = 0;
 
 void sigint_handler(int dummy) {
     UNUSED(dummy);
@@ -101,27 +102,30 @@ int init(void){
     if(pi < 0){
         fprintf(stderr, "Failed to connect to pigpi daemon, is it running?\n");
         fprintf(stderr, "Error: %s\n", pigpio_error(pi));
-        return 1;
+        return -1;
     }
     // TODO: check path
     serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
     if(serial < 0) {
         fprintf(stderr, "Failed to open serial: %s\n", pigpio_error(serial));
-        return 1;
+        return -1;
     }
-    // Set stdin to non-blocking
-    int flags = fcntl(STDIN_FILENO, F_GETFL);
-    if(flags < 0) {
-      perror("Failed to get stdin flags");
+    epoll_fd = epoll_create1(0);
+    if(epoll_fd < 0) {
+      perror("Failed to created epoll instance");
       serial_close(pi, serial);
       pigpio_stop(pi);
-      return 1;
+      return -1;
     }
-    if(fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK) < 0) {
-      perror("Failed to set stdin flags");
+    // Add stdin to epoll interest list
+    struct epoll_event ee;
+    ee.events = EPOLLIN | EPOLLERR;
+    ee.data.fd = STDIN_FILENO;
+    if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &ee) < 0) {
+      perror("Failed to control epoll instance");
       serial_close(pi, serial);
       pigpio_stop(pi);
-      return 1;
+      return -1;
     }
     return 0;
 }
@@ -141,6 +145,7 @@ int main(void) {
 
     int ret = 0;
     int rv = 0;
+    struct epoll_event ee;
 
     while(keep_running) {
         // main event loop
@@ -157,14 +162,22 @@ int main(void) {
                 keep_running = 0;
             }
         }
-
-        if((rv = read(STDIN_FILENO, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx)) > 0) {
+        rv = epoll_wait(epoll_fd, &ee, 1, 0);
+        if(rv > 0 && (ee.events & EPOLLIN)) {
+          // File descriptor is ready to read
+          rv = read(ee.data.fd, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx);
+          if(rv >= 0) {
             bt_buf_idx += rv;
             rv = parse_bt(bluetoothRxBuffer, bt_buf_idx);
             memmove(bluetoothRxBuffer, bluetoothRxBuffer + rv, bt_buf_idx - rv);
             bt_buf_idx -= rv;
-        } else if(rv != EAGAIN && rv != EWOULDBLOCK) {
-          perror("Error reading from stdin");
+          } else {
+            perror("Error reading from stdin");
+            ret = 1;
+            keep_running = 0;
+          }
+        } else if(rv < 0) {
+          perror("Error in epoll_wait");
           ret = 1;
           keep_running = 0;
         }
@@ -173,5 +186,6 @@ int main(void) {
     // Clean-up
     serial_close(pi, serial);
     pigpio_stop(pi);
+    close(epoll_fd);
     return ret;
 }
