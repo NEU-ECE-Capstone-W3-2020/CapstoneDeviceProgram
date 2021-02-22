@@ -83,8 +83,7 @@ int text_to_voice(const char *data, const uint8_t length){
 #endif
   int rv = serial_write(pi, serial, buffer, buf_idx);
   if(rv < 0) {
-    fprintf(stderr, "Failed to write over serial: %s\n", pigpio_error(rv));
-    fflush(stderr);
+    printf("Failed to write over serial: %s\n", pigpio_error(rv));
   }
   return -1;
 }
@@ -124,16 +123,14 @@ int init(void){
 
     pi = pigpio_start(NULL, NULL);
     if(pi < 0){
-        fprintf(stderr, "Failed to connect to pigpi daemon, is it running?\n");
-        fprintf(stderr, "Error: %s\n", pigpio_error(pi));
-        fflush(stderr);
+        printf("Failed to connect to pigpi daemon, is it running?\n");
+        printf("Error: %s\n", pigpio_error(pi));
         return -1;
     }
     // TODO: check path
-    serial = serial_open(pi, "/dev/serial1", BAUDRATE, 0);
+    serial = serial_open(pi, "/dev/ttys0", BAUDRATE, 0);
     if(serial < 0) {
-        fprintf(stderr, "Failed to open serial: %s\n", pigpio_error(serial));
-        fflush(stderr);
+        printf("Failed to open serial: %s\n", pigpio_error(serial));
         return -1;
     }
     epoll_fd = epoll_create1(0);
@@ -189,8 +186,7 @@ int main(void) {
                 memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
                 arx_buf_idx -= rv;
             } else if(rv < 0) {
-                fprintf(stderr, "Failed to read from serial: %s\n", pigpio_error(rv));
-                fflush(stderr);
+                printf("Failed to read from serial: %s\n", pigpio_error(rv));
                 ret = 1;
                 keep_running = 0;
             }
