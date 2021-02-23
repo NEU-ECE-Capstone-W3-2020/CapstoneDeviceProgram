@@ -117,13 +117,13 @@ int parse_serial(const char *buffer, const uint8_t length){
 #ifdef DEBUG
         printf("Received TTS msg: ");
         print_buffer_string(buffer + HDR_SIZE, buffer[LEN_IDX] - HDR_SIZE);
-        printf("\n")
+        printf("\n");
 #endif
         break;
     default:
       return 0;
     }
-    return buffer[LEN_IDX]
+    return buffer[LEN_IDX];
 }
 
 int init(void){
