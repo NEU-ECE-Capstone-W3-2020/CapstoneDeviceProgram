@@ -83,9 +83,10 @@ int text_to_voice(const char *data, const uint8_t length){
 #endif
   int rv = serial_write(pi, serial, buffer, buf_idx);
   if(rv < 0) {
-    printf("Failed to write over serial: %s\n", pigpio_error(rv));
+      printf("Failed to write over serial: %s\n", pigpio_error(rv));
+      return -1;
   }
-  return -1;
+  return 0;
 }
 
 int parse_bt(const char *buffer, const uint8_t length){
