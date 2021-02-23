@@ -15,7 +15,6 @@
 #define HDR_SIZE         2
 #define TYPE_IDX         0
 #define LEN_IDX          1
-#define REFERENCE_PIN   23
 
 #define TTS_MSG_TYPE  0x01
 #define BT_MSG_TYPE   0x02
@@ -128,11 +127,6 @@ int init(void){
         printf("Error: %s\n", pigpio_error(pi));
         return -1;
     }
-    if(set_mode(pi, REFERENCE_PIN, PI_OUTPUT) < 0) {
-        printf("Failed to set reference pin to high\n");
-        return -1;
-    }
-    if(gpio_write(pi, REFERENCE_PIN, 1))
     // TODO: check path
     serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
     if(serial < 0) {
