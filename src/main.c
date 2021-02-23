@@ -136,7 +136,6 @@ int init(void){
         printf("Error: %s\n", pigpio_error(pi));
         return -1;
     }
-    // TODO: check path
     serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
     if(serial < 0) {
         printf("Failed to open serial: %s\n", pigpio_error(serial));
