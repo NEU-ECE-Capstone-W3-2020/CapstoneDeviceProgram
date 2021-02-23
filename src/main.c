@@ -73,9 +73,9 @@ void toggle_mode(void){
 int text_to_voice(const char *data, const uint8_t length){
   if(length >= MAX_SIZE - HDR_SIZE) return -1;
   char buffer[MAX_SIZE];
-  uint32_t buf_idx = 0;
-  buffer[buf_idx++] = TTS_MSG_TYPE;
-  buffer[buf_idx++] = length + HDR_SIZE;
+  buffer[TYPE_IDX] = TTS_MSG_TYPE;
+  buffer[LEN_IDX] = length + HDR_SIZE;
+  uint32_t buf_idx = HDR_SIZE;
   memcpy(buffer + buf_idx, data, length);
   buf_idx += length;
 #ifdef DEBUG
