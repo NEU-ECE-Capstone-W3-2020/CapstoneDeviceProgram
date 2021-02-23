@@ -102,19 +102,28 @@ int parse_bt(const char *buffer, const uint8_t length){
       ret += i;
     }
   }
-  return ret;
+  return ret + 1;
 }
 
 int parse_serial(const char *buffer, const uint8_t length){
   if(length < HDR_SIZE) return 0;
-  switch(buffer[TYPE_IDX]) {
+  if(length < buffer[LEN_IDX]) return 0;
+
+    switch(buffer[TYPE_IDX]) {
     case BT_MSG_TYPE:
-      if(length < buffer[LEN_IDX]) return 0;
-      text_to_voice(buffer + HDR_SIZE, buffer[LEN_IDX] - HDR_SIZE);
-      return buffer[LEN_IDX];
+        // TODO
+        break;
+    case TTS_MSG_TYPE:
+#ifdef DEBUG
+        printf("Received TTS msg: ");
+        print_buffer_string(buffer + HDR_SIZE, buffer[LEN_IDX] - HDR_SIZE);
+        printf("\n")
+#endif
+        break;
     default:
       return 0;
-  }
+    }
+    return buffer[LEN_IDX]
 }
 
 int init(void){
