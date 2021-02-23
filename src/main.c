@@ -79,7 +79,9 @@ int text_to_voice(const char *data, const uint8_t length){
   memcpy(buffer + buf_idx, data, length);
   buf_idx += length;
 #ifdef DEBUG
-  print_buffer_string(buffer, buf_idx);
+  printf("Sending To Arduino: ");
+  print_buffer_string(buffer + HDR_SIZE, buf_idx - HDR_SIZE);
+  printf("\n");
 #endif
   int rv = serial_write(pi, serial, buffer, buf_idx);
   if(rv < 0) {
@@ -93,9 +95,6 @@ int parse_bt(const char *buffer, const uint8_t length){
   int ret = 0;
   for(int i = 0; i < length; ++i) {
     if(buffer[i] == '\n') {
-#ifdef DEBUG
-      print_buffer_string(buffer + ret, i - ret);
-#endif
       int rv = text_to_voice(buffer + ret, i - ret);
       if(rv < 0) {
           return rv;
