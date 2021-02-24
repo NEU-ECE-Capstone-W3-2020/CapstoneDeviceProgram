@@ -6,8 +6,9 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <errno.h>
-
-#include "pigpiod_if2.h"
+#include <sys/termios.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define DEBUG
 #define BAUDRATE      9600
@@ -34,7 +35,6 @@ enum State {
 static volatile int keep_running = 1;
 static enum Mode mode = Explore;
 static enum State state = Idle;
-static int pi = 0;
 static int serial = 0;
 static int epoll_fd = 0;
 
@@ -48,6 +48,7 @@ void print_buffer_string(const char *buffer, const int size) {
 }
 #endif
 
+
 void sigint_handler(int dummy) {
     UNUSED(dummy);
     keep_running = 0;
@@ -57,6 +58,25 @@ void set_handler(void) {
     struct sigaction act;
     act.sa_handler = sigint_handler;
     sigaction(SIGINT, &act, NULL);
+}
+
+int setup_config(int fd) {
+    struct termios tm;
+    if(tcgetattr(fd, &tm) < 0) {
+        perror("Error");
+        return -1;
+    }
+    // 9600 baud rate
+    if(cfsetospeed(&tm, B9600) < 0) {
+        perror("Error");
+        return -1;
+    }
+
+    if(tcsetattr(fd, TCSANOW, &tm) < 0) {
+        perror("Error");
+        return -1;
+    }
+    return 0;
 }
 
 void toggle_mode(void){
@@ -83,9 +103,9 @@ int text_to_voice(const char *data, const uint8_t length){
   print_buffer_string(buffer + HDR_SIZE, buf_idx - HDR_SIZE);
   printf("\n");
 #endif
-  int rv = serial_write(pi, serial, buffer, buf_idx);
+  int rv = write(serial, buffer, buf_idx);
   if(rv < 0) {
-      printf("Failed to write over serial: %s\n", pigpio_error(rv));
+      perror("Failed to write over serial");
       return -1;
   }
   return 0;
@@ -130,22 +150,14 @@ int init(void){
     // Set control c to call our custom handler
     set_handler();
 
-    pi = pigpio_start(NULL, NULL);
-    if(pi < 0){
-        printf("Failed to connect to pigpi daemon, is it running?\n");
-        printf("Error: %s\n", pigpio_error(pi));
-        return -1;
-    }
-    serial = serial_open(pi, "/dev/serial0", BAUDRATE, 0);
+    serial = open("/dev/USB0", O_RDWR);
     if(serial < 0) {
-        printf("Failed to open serial: %s\n", pigpio_error(serial));
+        perror("Failed to open serial");
         return -1;
     }
     epoll_fd = epoll_create1(0);
     if(epoll_fd < 0) {
       perror("Failed to created epoll instance");
-      serial_close(pi, serial);
-      pigpio_stop(pi);
       return -1;
     }
     // Add stdin to epoll interest list
@@ -154,8 +166,20 @@ int init(void){
     ee.data.fd = STDIN_FILENO;
     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &ee) < 0) {
       perror("Failed to control epoll instance");
-      serial_close(pi, serial);
-      pigpio_stop(pi);
+      close(serial);
+      return -1;
+    }
+    if(setup_config(serial) < 0) {
+        printf("Failed to configure serial");
+        close(serial);
+        return -1;
+    } 
+
+    ee.events = EPOLLIN;
+    ee.data.fd = serial;
+    if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, serial, &ee) < 0) {
+      perror("Failed to control epoll instance");
+      close(serial);
       return -1;
     }
     return 0;
@@ -181,43 +205,65 @@ int main(void) {
 
     while(keep_running) {
         // main event loop
-        if(serial_data_available(pi, serial) > 0) {
-            printf("Serial Data Found!\n");
-            int rv = serial_read(pi, serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
-            if(rv > 0) {
-                arx_buf_idx += rv;
-                rv = parse_serial(arduinoRxBuffer, arx_buf_idx);
-                if(rv < 0) {
-                    ret = 1;
-                    keep_running = 0;
-                }
-                memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
-                arx_buf_idx -= rv;
-            } else if(rv < 0) {
-                printf("Failed to read from serial: %s\n", pigpio_error(rv));
-                ret = 1;
-                keep_running = 0;
-            }
-        }
+        /* if(serial_data_available(pi, serial) > 0) { */
+        /*     printf("Serial Data Found!\n"); */
+        /*     int rv = serial_read(pi, serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx); */
+        /*     if(rv > 0) { */
+        /*         arx_buf_idx += rv; */
+        /*         rv = parse_serial(arduinoRxBuffer, arx_buf_idx); */
+        /*         if(rv < 0) { */
+        /*             ret = 1; */
+        /*             keep_running = 0; */
+        /*         } */
+        /*         memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv); */
+        /*         arx_buf_idx -= rv; */
+        /*     } else if(rv < 0) { */
+        /*         printf("Failed to read from serial: %s\n", pigpio_error(rv)); */
+        /*         ret = 1; */
+        /*         keep_running = 0; */
+        /*     } */
+        /* } */
         rv = epoll_wait(epoll_fd, &ee, 1, 0);
         if(rv > 0 && (ee.events & EPOLLIN)) {
-          printf("Bluetooth data found!\n");
-          // File descriptor is ready to read
-          rv = read(ee.data.fd, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx);
-          if(rv >= 0) {
-            bt_buf_idx += rv;
-            rv = parse_bt(bluetoothRxBuffer, bt_buf_idx);
-            if(rv < 0) {
-                ret = 1;
-                keep_running = 0;
+            if(ee.data.fd == STDIN_FILENO) {
+                printf("Bluetooth data found!\n");
+                // File descriptor is ready to read
+                rv = read(ee.data.fd, bluetoothRxBuffer + bt_buf_idx, MAX_SIZE - bt_buf_idx);
+                if(rv >= 0) {
+                    bt_buf_idx += rv;
+                    rv = parse_bt(bluetoothRxBuffer, bt_buf_idx);
+                    if(rv < 0) {
+                        ret = 1;
+                        keep_running = 0;
+                    }
+                    memmove(bluetoothRxBuffer, bluetoothRxBuffer + rv, bt_buf_idx - rv);
+                    bt_buf_idx -= rv;
+              } else {
+                  perror("Error reading from stdin");
+                  ret = 1;
+                  keep_running = 0;
+              }
+            } else if(ee.data.fd == serial){
+                printf("Serial Data Found!\n");
+                int rv = read(serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
+                if(rv > 0) {
+                    arx_buf_idx += rv;
+                    rv = parse_serial(arduinoRxBuffer, arx_buf_idx);
+                    if(rv < 0) {
+                        ret = 1;
+                        keep_running = 0;
+                    }
+                    memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
+                    arx_buf_idx -= rv;
+                    } else if(rv < 0) {
+                        /* printf("Failed to read from serial: %s\n", pigpio_error(rv)); */
+                        perror("Failed to read from serial");
+                        ret = 1;
+                        keep_running = 0;
+                    }
+            } else {
+                printf("Unkown fd\n");
             }
-            memmove(bluetoothRxBuffer, bluetoothRxBuffer + rv, bt_buf_idx - rv);
-            bt_buf_idx -= rv;
-          } else {
-              perror("Error reading from stdin");
-              ret = 1;
-              keep_running = 0;
-          }
         } else if(rv < 0) {
             perror("Error in epoll_wait");
             ret = 1;
@@ -227,8 +273,7 @@ int main(void) {
 
     // Clean-up
     printf("Clean up!\n");
-    serial_close(pi, serial);
-    pigpio_stop(pi);
+    close(serial);
     close(epoll_fd);
     return ret;
 }

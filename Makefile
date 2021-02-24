@@ -1,15 +1,14 @@
 INCLUDE  := ./include
 SRC      := ./src
 BIN      := ./bin
-PIGPIO   := ../pigpio
 
 CC       := gcc
-CC_FLAGS := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(PIGPIO)
+CC_FLAGS := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE)
 
 .PHONY: clean
 
 $(BIN)/main: $(SRC)/main.c $(BIN)
-	$(CC) $(CC_FLAGS) -L$(PIGPIO) $< -o $(BIN)/main -lpigpiod_if2 -lrt -pthread
+	$(CC) $(CC_FLAGS) -D_POSIX_C_SOURCE $< -o $(BIN)/main
 
 $(BIN):
 	mkdir -p $(BIN)
