@@ -60,20 +60,31 @@ void set_handler(void) {
     sigaction(SIGINT, &act, NULL);
 }
 
-int setup_config(int fd) {
+int setup_arduino_serial(int fd) {
     struct termios tm;
     if(tcgetattr(fd, &tm) < 0) {
-        perror("Error");
-        return -1;
-    }
-    // 9600 baud rate
-    if(cfsetospeed(&tm, B9600) < 0) {
-        perror("Error");
+        perror("Error getting serial line settings");
         return -1;
     }
 
+    // 9600 baud rate
+    if(cfsetospeed(&tm, B9600) < 0) {
+        perror("Error setting baud rate");
+        return -1;
+    }
+
+    tm.c_iflag |= ICANON;   // canonical mode
+
+    tm.c_cflag &= ~PARENB;  // No parity bit
+    tm.c_cflag &= ~CSTOPB;  // 1 stop bit
+    tm.c_cflag &= ~CSIZE;   // Clear data size mask
+    tm.c_cflag |= CS8;      // 8 data bits
+    tm.c_cflag |= CLOCAL;   // ignore modem control lines
+
+    tm.c_oflag &= ~OPOST;   // raw output
+
     if(tcsetattr(fd, TCSANOW, &tm) < 0) {
-        perror("Error");
+        perror("Error setting serial line settings");
         return -1;
     }
     return 0;
@@ -155,26 +166,30 @@ int init(void){
         perror("Failed to open serial");
         return -1;
     }
+
+    if(setup_arduino_serial(serial) < 0) {
+        printf("Failed to configure serial");
+        close(serial);
+        return -1;
+    } 
+
     epoll_fd = epoll_create1(0);
     if(epoll_fd < 0) {
       perror("Failed to created epoll instance");
+      close(serial);
       return -1;
     }
     // Add stdin to epoll interest list
     struct epoll_event ee;
-    ee.events = EPOLLIN | EPOLLERR;
+    ee.events = EPOLLIN;
     ee.data.fd = STDIN_FILENO;
     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &ee) < 0) {
       perror("Failed to control epoll instance");
       close(serial);
       return -1;
     }
-    if(setup_config(serial) < 0) {
-        printf("Failed to configure serial");
-        close(serial);
-        return -1;
-    } 
 
+    // Add serial to epoll interest list
     ee.events = EPOLLIN;
     ee.data.fd = serial;
     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, serial, &ee) < 0) {
@@ -182,6 +197,7 @@ int init(void){
       close(serial);
       return -1;
     }
+
     return 0;
 }
 
@@ -204,26 +220,7 @@ int main(void) {
     struct epoll_event ee;
 
     while(keep_running) {
-        // main event loop
-        /* if(serial_data_available(pi, serial) > 0) { */
-        /*     printf("Serial Data Found!\n"); */
-        /*     int rv = serial_read(pi, serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx); */
-        /*     if(rv > 0) { */
-        /*         arx_buf_idx += rv; */
-        /*         rv = parse_serial(arduinoRxBuffer, arx_buf_idx); */
-        /*         if(rv < 0) { */
-        /*             ret = 1; */
-        /*             keep_running = 0; */
-        /*         } */
-        /*         memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv); */
-        /*         arx_buf_idx -= rv; */
-        /*     } else if(rv < 0) { */
-        /*         printf("Failed to read from serial: %s\n", pigpio_error(rv)); */
-        /*         ret = 1; */
-        /*         keep_running = 0; */
-        /*     } */
-        /* } */
-        rv = epoll_wait(epoll_fd, &ee, 1, 0);
+        rv = epoll_wait(epoll_fd, &ee, 1, -1);
         if(rv > 0 && (ee.events & EPOLLIN)) {
             if(ee.data.fd == STDIN_FILENO) {
                 printf("Bluetooth data found!\n");
@@ -245,8 +242,8 @@ int main(void) {
               }
             } else if(ee.data.fd == serial){
                 printf("Serial Data Found!\n");
-                int rv = read(serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
-                if(rv > 0) {
+                rv = read(serial, arduinoRxBuffer + arx_buf_idx, MAX_SIZE - arx_buf_idx);
+                if(rv >= 0) {
                     arx_buf_idx += rv;
                     rv = parse_serial(arduinoRxBuffer, arx_buf_idx);
                     if(rv < 0) {
@@ -255,7 +252,7 @@ int main(void) {
                     }
                     memmove(arduinoRxBuffer, arduinoRxBuffer + rv, arx_buf_idx - rv);
                     arx_buf_idx -= rv;
-                    } else if(rv < 0) {
+                    } else {
                         /* printf("Failed to read from serial: %s\n", pigpio_error(rv)); */
                         perror("Failed to read from serial");
                         ret = 1;
