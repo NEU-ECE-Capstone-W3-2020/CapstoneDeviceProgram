@@ -11,7 +11,6 @@
 #include <fcntl.h>
 
 #define DEBUG
-#define BAUDRATE      9600
 #define MAX_SIZE       256
 #define HDR_SIZE         2
 #define TYPE_IDX         0
@@ -69,7 +68,11 @@ int setup_arduino_serial(int fd) {
 
     // 9600 baud rate
     if(cfsetospeed(&tm, B9600) < 0) {
-        perror("Error setting baud rate");
+        perror("Error setting output baud rate");
+        return -1;
+    }
+    if(cfsetispeed(&tm, B9600) < 0) {
+        perror("Error setting input baud rate");
         return -1;
     }
 
@@ -106,7 +109,7 @@ int text_to_voice(const char *data, const uint8_t length){
   char buffer[MAX_SIZE];
   buffer[TYPE_IDX] = TTS_MSG_TYPE;
   buffer[LEN_IDX] = length + HDR_SIZE;
-  uint32_t buf_idx = HDR_SIZE;
+  int buf_idx = HDR_SIZE;
   memcpy(buffer + buf_idx, data, length);
   buf_idx += length;
 #ifdef DEBUG
@@ -115,7 +118,7 @@ int text_to_voice(const char *data, const uint8_t length){
   printf("\n");
 #endif
   int rv = write(serial, buffer, buf_idx);
-  if(rv < 0) {
+  if(rv != buf_idx) {
       perror("Failed to write over serial");
       return -1;
   }
