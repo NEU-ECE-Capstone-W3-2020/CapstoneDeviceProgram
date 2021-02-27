@@ -5,7 +5,7 @@ BIN         := ./bin
 MERCURY_API := ./lib/mercuryapi-1.31.4.35/c/src/api
 
 SRC_FILES   := $(wildcard $(SRC)/*.c)
-SRC_OBJS    := $(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SRC_FILES))
+SRC_OBJS    := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SRC_FILES))
 
 CC          := gcc
 CC_FLAGS    := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(MERCURY_API)
