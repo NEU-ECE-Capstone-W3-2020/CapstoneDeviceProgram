@@ -83,6 +83,7 @@ int setup_arduino_serial(int fd) {
     tm.c_cflag &= ~CSIZE;   // Clear data size mask
     tm.c_cflag |= CS8;      // 8 data bits
     tm.c_cflag |= CLOCAL;   // ignore modem control lines
+    tm.c_cflag |= CREAD;    // Enable receiver
 
     tm.c_oflag &= ~OPOST;   // raw output
 
