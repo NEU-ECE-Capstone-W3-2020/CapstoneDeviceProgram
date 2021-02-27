@@ -1,17 +1,38 @@
-INCLUDE  := ./include
-SRC      := ./src
-BIN      := ./bin
+INCLUDE     := ./include
+SRC         := ./src
+OBJ         := ./obj
+BIN         := ./bin
+MERCURY_API := ./lib/mercuryapi-1.31.1.36/c/src/api/
 
-CC       := gcc
-CC_FLAGS := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE)
+SRC_FILES   := $(wildcard $(SRC)/*.c)
+SRC_OBJS    := $(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SRC_FILES))
 
-.PHONY: clean
+CC          := gcc
+CC_FLAGS    := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(MERCURY_API)
 
-$(BIN)/main: $(SRC)/main.c $(BIN)
-	$(CC) $(CC_FLAGS) -D_POSIX_C_SOURCE $< -o $(BIN)/main
+
+.PHONY: clean directories main
+
+main: directories $(MERCURY)/libmercuryapi.so.1 $(BIN)/main
+
+$(BIN)/main: $(SRC_OBJS)
+	$(CC) $(CC_FLAGS) -D_POSIX_C_SOURCE -L$(MERCURY_API) $^ -o $(BIN)/main -lmercuryapi -lpthread
+
+$(OBJ)/%.o: $(SRC)/%.c
+	$(CC) $(CC_FLAGS) -c $< -o $@
+
+$(MERCURY)/libmercuryapi.so.1:
+	cd $(MERCURY_API) && $(MAKE)
+
+directories: $(BIN) $(OBJ)
 
 $(BIN):
 	mkdir -p $(BIN)
 
+$(OBJ):
+	mkdir -p $(OBJ)
+
 clean:
 	rm $(BIN)/main
+	rm $(OBJ)/*.o
+	cd $(MERCURY_API) && $(MAKE) clean
