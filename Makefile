@@ -2,7 +2,7 @@ INCLUDE     := ./include
 SRC         := ./src
 OBJ         := ./obj
 BIN         := ./bin
-MERCURY_API := ./lib/mercuryapi-1.31.1.36/c/src/api/
+MERCURY_API := ./lib/mercuryapi-1.31.4.35/c/src/api
 
 SRC_FILES   := $(wildcard $(SRC)/*.c)
 SRC_OBJS    := $(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SRC_FILES))
