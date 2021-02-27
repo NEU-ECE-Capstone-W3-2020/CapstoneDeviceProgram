@@ -1,7 +1,7 @@
 bin/*
 .ccls
 .ccls-cache/*
-objs/*
+obj/*
 lib/mercuryapi-1.31.4.35/c/src/api/*.so
 lib/mercuryapi-1.31.4.35/c/src/api/*.so.*
 lib/mercuryapi-1.31.4.35/c/src/api/*.a

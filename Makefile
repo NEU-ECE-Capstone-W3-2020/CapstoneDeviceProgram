@@ -8,7 +8,7 @@ SRC_FILES   := $(wildcard $(SRC)/*.c)
 SRC_OBJS    := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SRC_FILES))
 
 CC          := gcc
-CC_FLAGS    := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(MERCURY_API)
+CC_FLAGS    := -std=gnu17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(MERCURY_API)
 
 
 .PHONY: clean directories main
@@ -16,7 +16,7 @@ CC_FLAGS    := -std=c17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(MERCURY_API
 main: directories $(MERCURY)/libmercuryapi.so.1 $(BIN)/main
 
 $(BIN)/main: $(SRC_OBJS)
-	$(CC) $(CC_FLAGS) -D_POSIX_C_SOURCE -L$(MERCURY_API) $^ -o $(BIN)/main -lmercuryapi -lpthread
+	$(CC) $(CC_FLAGS) -L$(MERCURY_API) $^ -o $(BIN)/main -lmercuryapi -lpthread
 
 $(OBJ)/%.o: $(SRC)/%.c
 	$(CC) $(CC_FLAGS) -c $< -o $@
