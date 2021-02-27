@@ -16,7 +16,7 @@ CC_FLAGS    := -std=gnu17 -Wall -Wextra -Wpedantic -g -I$(INCLUDE) -I$(MERCURY_A
 main: directories $(MERCURY)/libmercuryapi.so.1 $(BIN)/main
 
 $(BIN)/main: $(SRC_OBJS)
-	$(CC) $(CC_FLAGS) -L$(MERCURY_API) $^ -o $(BIN)/main -lmercuryapi -lpthread
+	$(CC) $(CC_FLAGS) -L$(MERCURY_API) $^  -lmercuryapi -lpthread -o $@
 
 $(OBJ)/%.o: $(SRC)/%.c
 	$(CC) $(CC_FLAGS) -c $< -o $@
