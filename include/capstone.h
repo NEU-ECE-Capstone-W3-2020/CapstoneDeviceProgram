@@ -3,8 +3,6 @@
 
 #include <stdio.h>
 
-#define DEBUG
-
 #define UNUSED(arg) (void) arg
 #ifdef DEBUG
 #define DPRINTF(...) printf(__VA_ARGS__)

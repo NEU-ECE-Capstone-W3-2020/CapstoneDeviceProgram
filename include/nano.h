@@ -3,7 +3,7 @@
 
 #include "tm_reader.h"
 
-#define NANO_BUFFER_SIZE   512
+#define NANO_BUFFER_SIZE   1024
 
 #define ANTENNA_POWER     1000
 #define BAUDRATE          9600
@@ -25,7 +25,7 @@
 
 typedef TMR_Reader Nano;
 
-int nano_init(Nano *nano);
+int nano_init(Nano *nano, const int emic);
 int nano_cleanup(Nano *nano);
 int nano_start_reading(Nano *nano);
 int nano_stop_reading(Nano *nano);
