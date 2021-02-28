@@ -44,6 +44,7 @@ $(OBJ):
 	mkdir -p $(OBJ)
 
 clean:
-	rm $(BIN)/main
+	rm $(BIN)/debug_main
+	rm $(BIN)/release_main
 	rm $(OBJ)/*.o
 	cd $(MERCURY_API) && $(MAKE) clean
